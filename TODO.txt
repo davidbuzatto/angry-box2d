@@ -1,0 +1,2 @@
+Next bird only when all pigs settled;
+Detect offscreen pigs;
