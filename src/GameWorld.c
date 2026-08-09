@@ -7,6 +7,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #include "raylib/raylib.h"
 //#include "raylib/raymath.h"
@@ -16,6 +17,7 @@
 
 #include "box2d/box2d.h"
 
+#include "Entity.h"
 #include "GameWorld.h"
 #include "ResourceManager.h"
 
@@ -26,7 +28,73 @@ GameWorld *createGameWorld( void ) {
 
     GameWorld *gw = (GameWorld*) malloc( sizeof( GameWorld ) );
 
-    gw->dummy = 0;
+    b2WorldDef worldDef = b2DefaultWorldDef();
+    gw->worldId = b2CreateWorld( &worldDef );
+
+    gw->entityCount = 0;
+
+    float screenWidthMeters = GetScreenWidth() / PIXELS_PER_METER;
+    const float groundHeightMeters = 1.0f;
+
+    // static ground
+    {
+        b2BodyDef groundBodyDef = b2DefaultBodyDef();
+        groundBodyDef.type = b2_staticBody;
+        groundBodyDef.position = (b2Vec2) { 
+            screenWidthMeters / 2.0f, // half width
+            groundHeightMeters / 2.0f // half height
+        };
+        b2BodyId groundBodyId = b2CreateBody( gw->worldId, &groundBodyDef );
+        b2Polygon groundBox = b2MakeBox( 
+            screenWidthMeters / 2.0f, // half width
+            groundHeightMeters / 2.0f // half height
+        );
+        b2ShapeDef groundShapeDef = b2DefaultShapeDef();
+        b2CreatePolygonShape( groundBodyId, &groundShapeDef, &groundBox );
+
+        gw->entities[gw->entityCount++] = (Entity) {
+            .bodyId = groundBodyId,
+            .type = ENTITY_GROUND,
+            .kind = SHAPE_BOX,
+            .size = { screenWidthMeters, groundHeightMeters },
+            .radius = 0.0f,
+            .color = DARKGREEN,
+            .alive = true
+        };
+    }
+
+    // test box (dynamic)
+    {
+        b2BodyDef boxBodyDef = b2DefaultBodyDef();
+        boxBodyDef.type = b2_dynamicBody;
+        boxBodyDef.position = (b2Vec2) { screenWidthMeters / 2.0f, 6.0f };
+        b2BodyId boxBodyId = b2CreateBody( gw->worldId, &boxBodyDef );
+
+        b2Polygon box = b2MakeBox( 0.5f, 0.5f );
+        b2ShapeDef boxShapeDef = b2DefaultShapeDef();
+        boxShapeDef.density = 1.0f;
+        boxShapeDef.material.friction = 0.3f;
+        boxShapeDef.material.restitution = 0.3f;
+        b2CreatePolygonShape( boxBodyId, &boxShapeDef, &box );
+
+        gw->entities[gw->entityCount++] = (Entity) {
+            .bodyId = boxBodyId,
+            .type = ENTITY_BLOCK,
+            .kind = SHAPE_BOX,
+            .size = { 1.0f, 1.0f },
+            .radius = 0.0f,
+            .color = BLUE,
+            .alive = true
+        };
+    }
+    
+    gw->birdEntityIndex = -1;
+    gw->birdsRemaining = 10;
+    gw->slingAnchor = (Vector2) { 0 };
+    gw->dragging = false;
+    gw->dragCurrent = (Vector2) { 0 };
+    gw->state = STATE_PLAYING;
+    gw->debugDraw = true;
 
     return gw;
 
@@ -36,6 +104,7 @@ GameWorld *createGameWorld( void ) {
  * @brief Destroys a GameWindow object and its dependecies.
  */
 void destroyGameWorld( GameWorld *gw ) {
+    b2DestroyWorld( gw->worldId );
     free( gw );
 }
 
@@ -43,7 +112,7 @@ void destroyGameWorld( GameWorld *gw ) {
  * @brief Reads user input and updates the state of the game.
  */
 void updateGameWorld( GameWorld *gw, float delta ) {
-
+    b2World_Step( gw->worldId, delta, 4 );
 }
 
 /**
@@ -54,14 +123,9 @@ void drawGameWorld( GameWorld *gw ) {
     BeginDrawing();
     ClearBackground( WHITE );
 
-    const char *text = "Basic game template";
-    Vector2 m = MeasureTextEx( GetFontDefault(), text, 40, 4 );
-    int x = GetScreenWidth() / 2 - m.x / 2;
-    int y = GetScreenHeight() / 2 - m.y / 2;
-    DrawRectangle( x, y, m.x, m.y, BLACK );
-    DrawText( text, x, y, 40, WHITE );
-
-    DrawFPS( 20, 20 );
+    for ( int i = 0; i < gw->entityCount; i++ ) {
+        drawEntity( &gw->entities[i] );
+    }
 
     EndDrawing();
 

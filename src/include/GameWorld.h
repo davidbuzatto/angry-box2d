@@ -7,8 +7,35 @@
  */
 #pragma once
 
+#include <stdbool.h>
+
+#include "box2d/box2d.h"
+#include "raylib/raylib.h"
+
+#include "Entity.h"
+#include "Macros.h"
+
+typedef enum GameState {
+    STATE_PLAYING,
+    STATE_WON,
+    STATE_LOST,
+} GameState;
+
 typedef struct GameWorld {
-    int dummy;
+    
+    b2WorldId worldId;
+    Entity entities[MAX_ENTITIES];
+
+    int entityCount;
+    int birdEntityIndex;
+    int birdsRemaining;
+    Vector2 slingAnchor;
+
+    bool dragging;
+    Vector2 dragCurrent;
+    GameState state;
+    bool debugDraw;
+
 } GameWorld;
 
 /**
