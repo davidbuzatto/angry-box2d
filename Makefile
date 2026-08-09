@@ -296,14 +296,14 @@ INC_FLAGS := $(addprefix -I,$(INC_DIRS))
 # -Wno-unused-parameter  : suppress unused-parameter warnings
 #                          (common in raylib callbacks and event handlers)
 # -pedantic-errors       : treat any non-standard extension as an error
-# -std=c99               : follow the ISO C99 standard for .c files
+# -std=c17               : follow the ISO C17 standard for .c files
 # -std=c++20             : follow the ISO C++20 standard for .cpp files
 # -Wno-missing-braces    : suppress false positives with nested initializer
 #                          lists in certain GCC versions
 # -----------------------------------------------------------------------------
 CFLAGS   := $(INC_FLAGS) -MMD -MP -O1 -Wall -Wextra \
              -Wno-unused-parameter -pedantic-errors \
-             -std=c99 -Wno-missing-braces
+             -std=c17 -Wno-missing-braces
 
 CPPFLAGS := $(INC_FLAGS) -MMD -MP -O1 -Wall -Wextra \
              -Wno-unused-parameter -pedantic-errors \
@@ -342,7 +342,7 @@ else ifeq ($(DETECTED_OS), macOS)
                -framework CoreAudio -framework AudioToolbox -lm
 else
     # Windows (MSYS2 or native) — raylib from local lib/win64_mingw-w64/
-    LDFLAGS := -L lib/win64_mingw-w64/ -lraylib -lopengl32 -lgdi32 -lwinmm -lm
+    LDFLAGS := -L lib/win64_mingw-w64/ -lraylib -lbox2d -lopengl32 -lgdi32 -lwinmm -lm
 endif
 
 

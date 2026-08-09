@@ -14,6 +14,8 @@
 //#include "raylib/raygui.h"       // other compilation units must only include
 //#undef RAYGUI_IMPLEMENTATION     // raygui.h
 
+#include "box2d/box2d.h"
+
 #include "GameWorld.h"
 #include "ResourceManager.h"
 

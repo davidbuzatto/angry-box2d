@@ -43,11 +43,12 @@ if ( $compile -or $cleanAndCompile -or $compileAndRun -or $all ) {
         -Wextra `
         -Wno-unused-parameter `
         -pedantic-errors `
-        -std=c99 `
+        -std=c17 `
         -Wno-missing-braces `
         -I src/include/ `
         -L lib/win64_mingw-w64/ `
         -lraylib `
+        -lbox2d `
         -lopengl32 `
         -lgdi32 `
         -lwinmm
