@@ -10,7 +10,7 @@
 #include <stdbool.h>
 
 #include "raylib/raylib.h"
-//#include "raylib/raymath.h"
+#include "raylib/raymath.h"
 //#define RAYGUI_IMPLEMENTATION    // to use raygui, comment these three lines.
 //#include "raylib/raygui.h"       // other compilation units must only include
 //#undef RAYGUI_IMPLEMENTATION     // raygui.h
@@ -21,14 +21,15 @@
 #include "Entity.h"
 #include "GameWorld.h"
 #include "ResourceManager.h"
+#include "Utils.h"
 
 static void addBox( 
     GameWorld *gw, b2BodyType bodyType, float x, float y, 
-    float halfWidth, float halfHeight, Color color, EntityType type );
+    float halfWidth, float halfHeight, float density, Color color, EntityType type );
 
 static void addCircle( 
     GameWorld *gw, b2BodyType bodyType, float x, float y, 
-    float radius, Color color, EntityType type );
+    float radius, float density, Color color, EntityType type );
 
 /**
  * @brief Creates a dinamically allocated GameWorld struct instance.
@@ -50,7 +51,7 @@ GameWorld *createGameWorld( void ) {
         gw, b2_staticBody, 
         screenWidthMeters / 2.0f, groundHeightMeters / 2.0f, 
         screenWidthMeters / 2.0f, groundHeightMeters / 2.0f,
-        DARKGREEN, ENTITY_GROUND
+        1.0f, DARKGREEN, ENTITY_GROUND
     );
 
     // block pyramid
@@ -67,7 +68,7 @@ GameWorld *createGameWorld( void ) {
 
         for ( int i = 0; i < blocksInRow; i++ ) {
             float x = startX + i * blockSize;
-            addBox( gw, b2_dynamicBody, x, y, blockSize / 2.0f, blockSize / 2.0f, BROWN, ENTITY_BLOCK );
+            addBox( gw, b2_dynamicBody, x, y, blockSize / 2.0f, blockSize / 2.0f, 1.0f, BROWN, ENTITY_BLOCK );
         }
 
     }
@@ -77,22 +78,32 @@ GameWorld *createGameWorld( void ) {
     addCircle( 
         gw, b2_dynamicBody, pyramidCenterX - blockSize * 2.5f, 
         groundHeightMeters + pigRadius, pigRadius, 
-        GREEN, ENTITY_PIG
+        1.0f, GREEN, ENTITY_PIG
     );
     addCircle( 
         gw, b2_dynamicBody, pyramidCenterX + blockSize * 2.5f,
         groundHeightMeters + pigRadius, pigRadius, 
-        GREEN, ENTITY_PIG
+        1.0f, GREEN, ENTITY_PIG
     );
     addCircle( 
         gw, b2_dynamicBody, pyramidCenterX,
         groundHeightMeters + pyramidRows * blockSize + pigRadius, pigRadius,
-        GREEN, ENTITY_PIG
+        1.0f, GREEN, ENTITY_PIG
     );
     
-    gw->birdEntityIndex = -1;
+    // sling + bird
+    float slingX = screenWidthMeters * 0.15f;
+    float slingY = groundHeightMeters + 2.0f;
+    gw->slingAnchor = b2ToScreen( (b2Vec2) { slingX, slingY } );
+
+    const float birdRadius = 0.35f;
+    addCircle( 
+        gw, b2_kinematicBody, slingX, slingY, birdRadius,
+        4.0f, RED, ENTITY_BIRD
+    );
+    gw->birdEntityIndex = gw->entityCount - 1;
+
     gw->birdsRemaining = 3;
-    gw->slingAnchor = (Vector2) { 0 };
     gw->dragging = false;
     gw->dragCurrent = (Vector2) { 0 };
     gw->state = STATE_PLAYING;
@@ -119,6 +130,55 @@ void updateGameWorld( GameWorld *gw, float delta ) {
         gw->debugDraw = !gw->debugDraw;
     }
 
+    if ( gw->birdEntityIndex != -1 ) {
+
+        Entity *bird = &gw->entities[gw->birdEntityIndex];
+        Vector2 mouse = GetMousePosition();
+
+        if ( !gw->dragging && IsMouseButtonPressed( MOUSE_BUTTON_LEFT ) ) {
+            Vector2 birdScreenPos = b2ToScreen( b2Body_GetPosition( bird->bodyId ) );
+            if ( CheckCollisionPointCircle( mouse, birdScreenPos, bird->radius * PIXELS_PER_METER * 1.5f ) ) {
+                gw->dragging = true;
+            }
+        }
+
+        if ( gw->dragging ) {
+
+            Vector2 offset = Vector2Subtract( mouse, gw->slingAnchor );
+            float dist = Vector2Length( offset );
+            float maxDragPixels = MAX_DRAG_METERS * PIXELS_PER_METER;
+            
+            if ( dist > maxDragPixels ) {
+                offset = Vector2Scale( offset, maxDragPixels / dist );
+            }
+
+            gw->dragCurrent = Vector2Add( gw->slingAnchor, offset );
+            b2Vec2 birdPos = screenToB2( gw->dragCurrent );
+            b2Body_SetTransform( bird->bodyId, birdPos, b2Rot_identity );
+
+            // launching
+            if ( IsMouseButtonReleased( MOUSE_BUTTON_LEFT ) ) {
+
+                b2Vec2 anchorMeters = screenToB2( gw->slingAnchor );
+                b2Vec2 launchDir = { anchorMeters.x - birdPos.x, anchorMeters.y - birdPos.y };
+                
+                b2Body_SetType( bird->bodyId, b2_dynamicBody );
+                b2Body_SetLinearVelocity( 
+                    bird->bodyId,
+                    (b2Vec2) {
+                        launchDir.x * LAUNCH_STRENGTH,
+                        launchDir.y * LAUNCH_STRENGTH
+                    }
+                );
+
+                gw->dragging = false;
+
+            }
+
+        }
+
+    }
+
     b2World_Step( gw->worldId, delta, 4 );
 
 }
@@ -135,6 +195,10 @@ void drawGameWorld( GameWorld *gw ) {
         drawEntity( &gw->entities[i] );
     }
 
+    if ( gw->dragging ) {
+        DrawLineEx( gw->slingAnchor, gw->dragCurrent, 4.0f, DARKBROWN );
+    }
+
     if ( gw->debugDraw ) {
         b2DebugDraw debugDraw = createGameDebugDraw();
         b2World_Draw( gw->worldId, &debugDraw );
@@ -146,7 +210,7 @@ void drawGameWorld( GameWorld *gw ) {
 
 static void addBox( 
     GameWorld *gw, b2BodyType bodyType, float x, float y, 
-    float halfWidth, float halfHeight, Color color, EntityType type ) {
+    float halfWidth, float halfHeight, float density, Color color, EntityType type ) {
 
     b2BodyDef bodyDef = b2DefaultBodyDef();
     bodyDef.type = bodyType;
@@ -155,6 +219,8 @@ static void addBox(
 
     b2Polygon box = b2MakeBox( halfWidth, halfHeight );
     b2ShapeDef shapeDef = b2DefaultShapeDef();
+    shapeDef.density = density;
+    shapeDef.material.friction = 0.35f;
     b2CreatePolygonShape( bodyId, &shapeDef, &box );
 
     gw->entities[gw->entityCount++] = (Entity) {
@@ -171,7 +237,7 @@ static void addBox(
 
 static void addCircle( 
     GameWorld *gw, b2BodyType bodyType, float x, float y, 
-    float radius, Color color, EntityType type ) {
+    float radius, float density, Color color, EntityType type ) {
 
     b2BodyDef bodyDef = b2DefaultBodyDef();
     bodyDef.type = bodyType;
@@ -180,7 +246,7 @@ static void addCircle(
 
     b2Circle circle = { .center = { 0 }, .radius = radius };
     b2ShapeDef shapeDef = b2DefaultShapeDef();
-    shapeDef.density = 1.0f;
+    shapeDef.density = density;
     shapeDef.material.friction = 0.3f;
     shapeDef.material.restitution = 0.3f;
     b2CreateCircleShape( bodyId, &shapeDef, &circle );

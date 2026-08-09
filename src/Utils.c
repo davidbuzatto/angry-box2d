@@ -10,3 +10,10 @@ Vector2 b2ToScreen( b2Vec2 p ) {
         GetScreenHeight() - p.y * PIXELS_PER_METER
     };
 }
+
+b2Vec2 screenToB2( Vector2 p ) {
+    return (b2Vec2) {
+        p.x / PIXELS_PER_METER,
+        ( GetScreenHeight() - p.y ) / PIXELS_PER_METER
+    };
+}
